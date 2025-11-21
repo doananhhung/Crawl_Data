@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant User as Người dùng
+    participant Script as Crawl.py
+    participant Firecrawl as Firecrawl API
+    participant Gemini as Gemini API
+    participant FS as Filesystem (Output/Log)
+
+    User->>Script: Chạy script (Danh sách URLs)
+    Script->>Script: Tải API keys (.env)
+
+    loop Duyệt từng URL trong danh sách
+        loop Thử lại tối đa 3 lần (Retry)
+            alt Crawl thành công
+                Script->>Firecrawl: Gửi yêu cầu crawl(url)
+                Firecrawl-->>Script: Trả về dữ liệu (Markdown)
+                
+                Note right of Script: Thoát vòng lặp Retry
+            else Lỗi Crawl
+                Script->>Script: Chờ 5s rồi thử lại
+            end
+        end
+
+        alt Có dữ liệu Markdown
+            Script->>Script: Tạo prompt xử lý dữ liệu
+            Script->>Gemini: Gửi prompt + Markdown
+            Gemini-->>Script: Trả về kết quả (Structured Text)
+            
+            Script->>FS: Lưu file vào thư mục `output/`
+            Script-->>User: Thông báo thành công
+        else Hết số lần thử lại hoặc Lỗi
+            Script->>FS: Ghi lỗi vào `crawl_errors.log`
+            Script-->>User: Thông báo lỗi & Bỏ qua URL
+        end
+        
+        Script->>Script: Nghỉ 5s (Rate limit)
+    end
